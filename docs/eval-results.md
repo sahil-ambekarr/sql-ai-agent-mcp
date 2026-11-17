@@ -78,7 +78,7 @@ Of the 12 failures (some have more than one cause):
    and append a hint to the SQL error when it sees a known non-SQLite function.
 2. **Missing join (2: q03, q05).** It copied the revenue join from the prompt and selected `c.name` / `p.category`
    without adding the join to `customers` / `products`. *Fix:* include one complete worked example query in the prompt.
-3. **Repeating a failed query instead of fixing it (all 6 step-limit failures).** The SQL error goes back to the model,
+3. **Repeating a failed query instead of fixing it (4: q03, q04, q05, q13).** The SQL error goes back to the model,
    but it resends the identical statement. *Fix:* detect an exact repeat in `src/agent/loop.ts` and reply
    "you already ran this and it failed with: ..." without spending a database call.
 4. **Drifting off the question (3: q06, q16, and q11/q07 answers).** After a correct first query the model runs

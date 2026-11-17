@@ -221,7 +221,7 @@ src/
 eval/questions.json       16 questions with gold SQL
 eval/results/             saved eval runs
 mssql/init/01-seed.sql    generated T-SQL seed (sqlcmd variables, no secrets)
-docs/                     threat model, eval results, demo transcripts, GIF
+docs/                     threat-model.md, eval-results.md, demo/ transcripts, screenshots/demo.gif
 tests/                    Vitest suites
 scripts/                  seeding and demo capture/render
 ```
@@ -232,7 +232,7 @@ scripts/                  seeding and demo capture/render
 npm run lint && npm run typecheck && npm test
 ```
 
-Last local run (2026-11-17, Node 24.13, Windows 11): **138 tests in 7 files, all passing**, about 15 s.
+Last local run (2026-11-17, Node 24.13, Windows 11): **142 tests in 8 files, all passing**, about 15 s.
 
 | File | Tests | What it covers |
 |---|---|---|
@@ -242,6 +242,7 @@ Last local run (2026-11-17, Node 24.13, Windows 11): **138 tests in 7 files, all
 | `tests/mcp-http.test.ts` | 2 | streamable HTTP transport and the Host-header guard |
 | `tests/agent.test.ts` | 9 | agent loop over real MCP with the mock provider: schema priming, step limit, time limit, and the ticket-42 prompt injection (every write the "obedient" model tries is blocked) |
 | `tests/providers.test.ts` | 11 | Ollama JSON and tools modes, retries, abort; Claude provider with a stubbed HTTP layer |
+| `tests/eval-grade.test.ts` | 4 | eval grading: number tolerance, names, months, and that a run without a final answer never counts |
 | `tests/mssql-dialect.test.ts` | 14 | T-SQL TOP rewrite, catalog SQL, T-SQL guard dialect, generated seed script |
 
 CI (`.github/workflows/ci.yml`) runs lint, typecheck, build, seed, the tests, and `npm run eval -- --provider mock`.
@@ -262,6 +263,8 @@ CI (`.github/workflows/ci.yml`) runs lint, typecheck, build, seed, the tests, an
 
 ## Roadmap
 
+- Act on the eval failures: SQLite date-function hints in the prompt, detect a repeated failing query in the loop, one complete worked example query.
+- Measure native tool-calling mode and a larger local model against the same 16 questions.
 - Run the SQL Server path against a real instance and add it to CI as a service container.
 - Column-level masking for personal data (customer emails).
 - A `sample_rows` tool and per-table descriptions to help small models.

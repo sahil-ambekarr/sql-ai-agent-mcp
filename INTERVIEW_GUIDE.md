@@ -51,12 +51,6 @@ set up, which is outside the code. The guard also gives the model a clear, speci
 ("keyword INTO is not allowed") that it can act on, instead of a driver error. I treat the
 guard, the parser and the connection as three independent layers so a bug in one is not enough.
 
-**Q: Why reject all comments? That seems strict.**
-Engines disagree about comment syntax. T-SQL allows nested `/* /* */ */`, MySQL runs
-`/*! ... */` as code. If my tokenizer and the database read a comment differently, they
-see different statements. Refusing comments removes that whole class of trick. The cost is
-small: the model gets "comments are not allowed" and resends the query without one.
-
 **Q: Why a keyword denylist if you also parse the SQL?**
 node-sql-parser does not cover every dialect detail; its SQLite grammar rejects
 `OVER (ORDER BY ...)`, for example, so I fall back to its PostgreSQL grammar. A grammar
@@ -97,7 +91,17 @@ Each question has a gold SQL statement; the expected answer is whatever that SQL
 on the seeded database. The model's free-text answer is graded by type: numbers must
 appear within a tolerance, names must all appear, months can be `2025-12` or "December".
 It is lenient (any matching number in the answer counts), and 16 questions is a small
-sample, so I report it as a rough signal, not a benchmark.
+sample, so I report it as a rough signal, not a benchmark. llama3.2 3B on CPU got 4/16,
+mean 4.6 steps and 68 s per question (`docs/eval-results.md`). I also found a grader bug
+in that run: a "stopped after 6 steps" message matched an expected 5.92; `gradeRun` now
+only counts real final answers, and I regraded the saved run and said so.
+
+**Q: Why is llama3.2 only 25% correct, and what would you do about it?**
+The failures cluster: PostgreSQL/MySQL date functions in SQLite (`EXTRACT`, `DATEDIFF`),
+selecting `c.name` without joining `customers`, resending the exact query that just failed
+(4 of the 6 step-limit stops), and drifting into revenue queries nobody asked for. None of these is
+a guardrail problem; the model never tried to write. Next steps are prompt-level (dialect
+hints, one complete example query) and loop-level (refuse an exact repeat of a failed query).
 
 **Q: What would you change for production use?**
 Ship the audit log to a write-once store; add per-user auth on the HTTP transport; add
@@ -118,7 +122,8 @@ says so.
 2. **Mask the `email` column.** In `src/db/types.ts`, `RowCollector.add` sees every row;
    add an option with a set of column names to replace with `"***"`. Pass it from
    `QueryService`. Write a test that `SELECT email FROM customers` returns masked values.
-3. **Count parser-refused queries in the eval.** In `src/eval/run.ts` the result rows already
-   carry each SQL with `blocked: true/false`; the agent's tool results include the layer name
-   (`BLOCKED by parser guardrail`). Store that in `ToolCallRecord` in `src/agent/loop.ts` and
-   add a "parser refusals" line to the summary.
+3. **Stop repeated failing queries.** In the eval, 4 of the 6 step-limit failures were the
+   model resending the exact SQL that had just failed. In `src/agent/loop.ts`, keep the failed queries from
+   `result.sql`; if a new `run_select` matches one exactly, skip the MCP call and return an
+   error that quotes the earlier failure. Test it in `tests/agent.test.ts` with a `MockProvider`
+   script that repeats a bad query.
