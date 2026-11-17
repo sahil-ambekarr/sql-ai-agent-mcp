@@ -1,0 +1,3 @@
+$ npm run tool -- run_select "WITH x AS (SELECT 1) DELETE FROM orders"
+> run_select "WITH x AS (SELECT 1) DELETE FROM orders"
+[tool error] BLOCKED by lexical guardrail: keyword DELETE is not allowed (it can change data, schema or server state)

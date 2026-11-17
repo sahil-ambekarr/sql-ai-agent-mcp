@@ -19,8 +19,8 @@ interface Capture {
 const captures: Capture[] = [
   {
     file: 'docs/demo/ask.txt',
-    display: 'npm run ask -- "Which 5 customers spent the most last quarter?"',
-    args: ['src/agent/cli.ts', 'Which 5 customers spent the most last quarter?'],
+    display: 'npm run ask -- "How many orders were cancelled last quarter?"',
+    args: ['src/agent/cli.ts', 'How many orders were cancelled last quarter?'],
     env: { AGENT_TODAY: '2026-11-17' },
   },
   {

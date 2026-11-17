@@ -7,7 +7,8 @@
  *    error and retried (max 2 times).
  *  - `tools`: Ollama's native tool calling (`tools` in /api/chat).
  *
- * See docs/eval-results.md for why `json` is the default with llama3.2 (3B).
+ * `json` is the default for llama3.2 (3B) because the format constraint makes
+ * every reply parseable; docs/eval-results.md has the measured run.
  */
 import { z } from 'zod';
 import { withRetry } from '../retry.ts';

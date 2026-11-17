@@ -9,7 +9,7 @@ An MCP server that gives an LLM **read-only** SQL access to a sample business da
 
 ![Demo: the agent answering a question with llama3.2, then two blocked write attempts](docs/screenshots/demo.gif)
 
-*The GIF is rendered from real captured CLI output ([docs/demo/](docs/demo/)) by `npm run demo:gif`; nothing in it was typed by hand. The first scene is a real llama3.2 run on a CPU-only laptop, including its mistakes.*
+*The GIF is rendered from real captured CLI output ([docs/demo/](docs/demo/)) by `npm run demo:gif`; nothing in it was typed by hand. The first scene is a real llama3.2 run on a CPU-only laptop. I picked a question it also answered correctly in the eval; on the full set it gets 4 of 16 right (see Eval results). The other two scenes are writes blocked by the guard.*
 
 ## The problem it automates
 
@@ -172,7 +172,27 @@ I built this repo on a machine without Docker, so **the SQL Server path has not 
 
 **Ollama mode.** I implemented both Ollama's native tool calling and a JSON-action protocol. The default is `json`: the model replies with one JSON object (`run_select`, `describe_table`, `list_tables` or `final_answer`), Ollama's `format` parameter constrains decoding to a JSON Schema, the reply is validated with zod, and an invalid reply is sent back with the error for up to two retries.
 
-EVAL_SECTION_PLACEHOLDER
+## Eval results
+
+Measured 2026-11-17 on a CPU-only laptop (AMD Ryzen 5 5500U, integrated graphics unused, 16 GB RAM, Windows 11), with Ollama shared with two other jobs. Full write-up with every question and the failure analysis: [docs/eval-results.md](docs/eval-results.md). Raw JSON: [eval/results/ollama-llama3-2-json.json](eval/results/ollama-llama3-2-json.json).
+
+| Provider | Questions | Correct | Mean steps | Mean latency / question | Step-limit stops | SQL errors | Guardrail blocks |
+|---|---|---|---|---|---|---|---|
+| `ollama` llama3.2 3B, JSON mode | 16 (full set) | **4 (25.0%)** | 4.56 / 6 | 67.9 s | 6 (+1 hit the 5-min cap) | 11 | 0 |
+| `mock` (replays the gold SQL) | 16 | 16 | 2.00 | under 0.1 s | 0 | 0 | 0 |
+| `claude` | not measured (no API key; not verified against the live API) | | | | | | |
+
+**Method.** The eval drives the real pipeline: it spawns the MCP server, runs the agent with "today" pinned to 2026-11-17, temperature 0, at most 6 model steps and 5 minutes per question, and grades the free-text answer against the result of each question's gold SQL on the seeded database (numbers within a tolerance, all expected names present, or the right month). A run that stops without a final answer never counts. The mock row only proves the plumbing and grading work; it says nothing about a model.
+
+**Reproduce.**
+
+```bash
+npm run seed
+npm run eval -- --provider ollama --mode json --budget-min 40 --question-min 5
+npm run eval -- --provider mock
+```
+
+**What went wrong, and limitations.** The 3B model's main failures were PostgreSQL/MySQL date functions in SQLite (`EXTRACT`, `DATEDIFF`), selecting a column without joining its table, resending the same failing query until the step limit, and drifting into revenue queries nobody asked for. It never attempted a write, so the guardrails were not exercised by the model in this run (they are exercised by the test suite, including the prompt-injection fixture). Sixteen questions and one run is a small sample; grading is lenient about extra text; latency includes queueing on a shared CPU. I regraded one question after finding a grader bug (details in the write-up). Native tool-calling mode was not measured.
 
 ## Project structure
 
@@ -236,7 +256,7 @@ CI (`.github/workflows/ci.yml`) runs lint, typecheck, build, seed, the tests, an
 - **SQLite queries run in a child process** so the timeout can kill a runaway query; better-sqlite3 is synchronous and cannot be interrupted from JavaScript.
 - **Row limit by reading, not rewriting, on SQLite**; TOP rewrite on the outer SELECT plus a streaming cap on SQL Server (wrapping in a subquery breaks ORDER BY in T-SQL).
 - **Schema priming.** The agent fetches the schema through `list_tables`/`describe_table` once and puts a compact version in the system prompt. With a 3B model this saves several slow steps; the model can still call `describe_table` itself.
-- **JSON-action protocol by default for llama3.2** (see Configuration and the eval section).
+- **JSON-action protocol by default for llama3.2.** Ollama's `format` constrains decoding to a JSON Schema, and in the eval run none of the 73 model steps ended in an unparseable reply (0 provider errors). I have not measured native tool-calling mode against it, so this is a design choice, not a measured win.
 - **Pinned "today"** (`AGENT_TODAY`, 2026-11-17 in the eval) so "last quarter" has one correct answer. The seeded data ends 2026-09-30.
 - **Node runs the TypeScript directly** (`erasableSyntaxOnly`), so there is no build step for development; `npm run build` emits `dist/` for hosts that need JavaScript.
 

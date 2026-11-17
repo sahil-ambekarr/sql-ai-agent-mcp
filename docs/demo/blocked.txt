@@ -1,0 +1,3 @@
+$ npm run tool -- run_select "SELECT 1; DROP TABLE customers"
+> run_select "SELECT 1; DROP TABLE customers"
+[tool error] BLOCKED by lexical guardrail: multiple statements are not allowed

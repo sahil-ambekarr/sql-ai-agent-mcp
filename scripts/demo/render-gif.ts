@@ -49,7 +49,8 @@ function page(title: string, lines: string[]): string {
   <div class="label">${escape(LABEL)}</div></div></body></html>`;
 }
 
-const browser = await chromium.launch();
+// Use Playwright's own Chromium if installed, else the system Chrome.
+const browser = await chromium.launch().catch(() => chromium.launch({ channel: 'chrome' }));
 const tab = await browser.newPage({ viewport: { width: WIDTH, height: HEIGHT }, deviceScaleFactor: 1 });
 const gif = GIFEncoder();
 let frames = 0;
