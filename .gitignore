@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+data/
+logs/
+*.db
+*.db-journal
+*.sqlite
+coverage/
+.vitest/
+*.log
+scripts/demo/frames/
+.DS_Store
+Thumbs.db

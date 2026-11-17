@@ -1,0 +1,52 @@
+{
+  "name": "sql-ai-agent-mcp",
+  "version": "0.1.0",
+  "description": "Read-only SQL tools over a sample business database, exposed as an MCP server, with an agent CLI that answers business questions.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "author": "Sahil Ambekar",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "seed": "node scripts/seed-sqlite.ts",
+    "seed:mssql-script": "node scripts/gen-mssql-seed.ts",
+    "server": "node src/server/stdio.ts",
+    "server:http": "node src/server/http.ts",
+    "ask": "node src/agent/cli.ts",
+    "tool": "node src/agent/tool-cli.ts",
+    "eval": "node src/eval/run.ts",
+    "eval:gold": "node src/eval/gold.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "demo:capture": "node scripts/demo/capture.ts",
+    "demo:gif": "node scripts/demo/render-gif.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.9.0",
+    "@modelcontextprotocol/client": "^2.4.0",
+    "@modelcontextprotocol/node": "^2.1.2",
+    "@modelcontextprotocol/server": "^2.4.0",
+    "better-sqlite3": "^13.2.0",
+    "mssql": "^12.7.14",
+    "node-sql-parser": "^5.4.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/mssql": "^12.3.0",
+    "@types/node": "^24.19.2",
+    "@types/pngjs": "^6.0.5",
+    "eslint": "^10.15.0",
+    "gifenc": "^1.0.3",
+    "playwright": "^1.65.1",
+    "pngjs": "^7.0.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.73.0",
+    "vitest": "^5.1.0"
+  }
+}
