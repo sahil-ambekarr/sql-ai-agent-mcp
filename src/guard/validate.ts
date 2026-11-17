@@ -12,7 +12,7 @@
  * enough to let a write through.
  */
 import nsp from 'node-sql-parser';
-import { tokenize, LexError, type Token } from './lexer.ts';
+import { tokenize, type LexError, type Token } from './lexer.ts';
 
 const { Parser } = nsp;
 const parser = new Parser();

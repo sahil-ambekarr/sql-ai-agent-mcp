@@ -167,7 +167,7 @@ export function generateSampleData(seed = 20261117): SampleData {
   const customers: Customer[] = [];
   const usedNames = new Set<string>();
   for (let i = 1; i <= 400; i++) {
-    let name = '';
+    let name: string;
     do {
       name = `${pick(NAME_A)} ${pick(NAME_B)}${r() < 0.3 ? ' ' + pick(['Ltd', 'Co', 'Group']) : ''}`;
     } while (usedNames.has(name));
