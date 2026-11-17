@@ -150,6 +150,7 @@ export function systemPrompt(opts: Pick<AgentOptions, 'today' | 'dialect'>, sche
     schema ? `Database schema:\n${schema}` : 'Call list_tables and describe_table to learn the schema.',
     'Business rules:',
     "- Revenue (sales, spend) = SUM(order_items.quantity * order_items.unit_price * (1 - order_items.discount)), counting only orders whose status is 'completed' or 'shipped'.",
+    "  Revenue needs the join: FROM orders o JOIN order_items oi ON oi.order_id = o.id WHERE o.status IN ('completed', 'shipped').",
     "- Dates are stored as 'YYYY-MM-DD' text. Filter with BETWEEN 'start' AND 'end'.",
     'Rules:',
     `- Use run_select with ONE read-only ${dialect} SELECT. Do the aggregation, sorting and LIMIT in SQL.`,
