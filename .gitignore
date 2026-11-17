@@ -14,3 +14,4 @@ coverage/
 scripts/demo/frames/
 .DS_Store
 Thumbs.db
+eval/results/mock.json
