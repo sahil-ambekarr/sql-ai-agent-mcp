@@ -6,11 +6,14 @@
  *   npm run eval -- --provider mock       # scripted, used in CI
  *   npm run eval -- --mode tools          # Ollama native tool calling
  *   npm run eval -- --ids q01_customer_count,q04_revenue_2025
- *   npm run eval -- --budget-min 45       # stop starting new questions after 45 minutes
+ *   npm run eval -- --budget-min 45       # whole-run wall-clock budget
+ *   npm run eval -- --question-min 6      # per-question wall-clock cap
  *
  * Questions run one at a time (Ollama is CPU-only and shared). The results
  * file is rewritten after every question, so an interrupted run keeps what
- * it finished; questions not started inside the budget are listed as skipped.
+ * it finished. A question that runs past its cap (or past the end of the
+budget) is aborted mid-call and graded as 'time_limit'; questions not started
+inside the budget are listed as skipped.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { cpus, totalmem } from 'node:os';
@@ -33,6 +36,8 @@ const cfg = { ...base, llm: { ...base.llm, provider: providerName, ollamaMode: m
 const ids = arg('ids')?.split(',');
 const budgetMs = arg('budget-min') ? Number(arg('budget-min')) * 60_000 : Infinity;
 if (Number.isNaN(budgetMs) || budgetMs <= 0) throw new Error('--budget-min must be a positive number');
+const questionMs = arg('question-min') ? Number(arg('question-min')) * 60_000 : Infinity;
+if (Number.isNaN(questionMs) || questionMs <= 0) throw new Error('--question-min must be a positive number');
 
 const { today, questions: all } = loadQuestions();
 const questions = computeGold(cfg.sqlitePath, ids ? all.filter((q) => ids.includes(q.id)) : all);
@@ -77,6 +82,9 @@ function summarize() {
     sqlErrors: rows.reduce((a, r) => a + r.sqlErrors, 0),
     stoppedAtStepLimit: rows.filter((r) => r.stoppedReason === 'max_steps').length,
     providerErrors: rows.filter((r) => r.stoppedReason === 'provider_error').length,
+    stoppedAtTimeLimit: rows.filter((r) => r.stoppedReason === 'time_limit').length,
+    budgetMs: Number.isFinite(budgetMs) ? budgetMs : null,
+    questionCapMs: Number.isFinite(questionMs) ? questionMs : null,
     maxSteps: cfg.agentMaxSteps,
     llmTimeoutMs: cfg.llm.timeoutMs,
     hardware: `${cpus()[0]?.model ?? 'unknown CPU'}, ${Math.round(totalmem() / 2 ** 30)} GB RAM, ${process.platform}`,
@@ -96,7 +104,9 @@ try {
     const llm = createProvider(cfg.llm, { mockScript });
     let r: AgentResult;
     try {
-      r = await runAgent(q.question, client, llm, { maxSteps: cfg.agentMaxSteps, today, dialect: cfg.dbBackend });
+      const capMs = Math.min(questionMs, budgetMs - (Date.now() - t0));
+      const signal = Number.isFinite(capMs) ? AbortSignal.timeout(Math.max(1, capMs)) : undefined;
+      r = await runAgent(q.question, client, llm, { maxSteps: cfg.agentMaxSteps, today, dialect: cfg.dbBackend, signal });
     } catch (e) {
       // A lost MCP connection should cost one question, not the whole run.
       const message = (e as Error).message;
@@ -138,7 +148,7 @@ out(`Mean steps:        ${summary.meanSteps.toFixed(2)} (limit ${summary.maxStep
 out(`Mean latency:      ${(summary.meanLatencyMs / 1000).toFixed(1)} s`);
 out(`Guardrail blocks:  ${summary.guardrailBlocks}`);
 out(`SQL errors:        ${summary.sqlErrors}`);
-out(`Hit step limit:    ${summary.stoppedAtStepLimit}   provider errors: ${summary.providerErrors}`);
+out(`Hit step limit:    ${summary.stoppedAtStepLimit}   time limit: ${summary.stoppedAtTimeLimit}   provider errors: ${summary.providerErrors}`);
 
 out(`Saved ${file}`);
 if (providerName === 'mock' && summary.correct !== summary.questions) process.exitCode = 1;

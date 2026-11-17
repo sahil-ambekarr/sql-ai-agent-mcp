@@ -25,6 +25,19 @@ const ollama = (mode: 'json' | 'tools', fetchImpl: typeof fetch) =>
   new OllamaProvider({ baseUrl: 'http://ollama.test', model: 'llama3.2', mode, timeoutMs: 5000, fetchImpl });
 
 describe('Ollama JSON-action protocol', () => {
+  it('aborts an in-flight call on the caller signal and does not retry it', async () => {
+    let calls = 0;
+    const hang = ((_url: string | URL | Request, init?: RequestInit) => {
+      calls++;
+      return new Promise<Response>((_resolve, reject) => init?.signal?.addEventListener('abort', () => reject(new Error('aborted'))));
+    }) as typeof fetch;
+    const ctrl = new AbortController();
+    const pending = ollama('json', hang).complete(HISTORY, TOOLS, ctrl.signal);
+    setTimeout(() => ctrl.abort(), 20);
+    await expect(pending).rejects.toThrow(/aborted/);
+    expect(calls).toBe(1);
+  });
+
   it('parses a valid action into a tool call and sends a JSON-schema format', async () => {
     const { impl, requests } = stubFetch([{ body: { message: { role: 'assistant', content: '{"action":"run_select","query":"SELECT COUNT(*) FROM customers"}' } } }]);
     const turn = await ollama('json', impl).complete(HISTORY, TOOLS);

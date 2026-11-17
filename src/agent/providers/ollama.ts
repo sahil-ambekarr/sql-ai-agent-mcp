@@ -69,11 +69,11 @@ export class OllamaProvider implements LlmProvider {
     this.name = `ollama:${opts.model}:${opts.mode}`;
   }
 
-  complete(messages: ChatMessage[], tools: ToolSpec[]): Promise<AssistantTurn> {
-    return this.opts.mode === 'tools' ? this.completeWithTools(messages, tools) : this.completeWithJson(messages);
+  complete(messages: ChatMessage[], tools: ToolSpec[], signal?: AbortSignal): Promise<AssistantTurn> {
+    return this.opts.mode === 'tools' ? this.completeWithTools(messages, tools, signal) : this.completeWithJson(messages, signal);
   }
 
-  private async chat(body: Record<string, unknown>): Promise<OllamaMessage> {
+  private async chat(body: Record<string, unknown>, outer?: AbortSignal): Promise<OllamaMessage> {
     return withRetry(
       async () => {
         let res: Response;
@@ -82,7 +82,7 @@ export class OllamaProvider implements LlmProvider {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ model: this.opts.model, stream: false, options: { temperature: 0, num_ctx: 8192 }, ...body }),
-            signal: AbortSignal.timeout(this.opts.timeoutMs),
+            signal: outer ? AbortSignal.any([outer, AbortSignal.timeout(this.opts.timeoutMs)]) : AbortSignal.timeout(this.opts.timeoutMs),
           });
         } catch (e) {
           throw new ProviderError(`Ollama request failed: ${(e as Error).message}`);
@@ -102,6 +102,7 @@ export class OllamaProvider implements LlmProvider {
         baseDelayMs: 1000,
         // Retry transport errors and 5xx; a 4xx (bad model name, bad request) will not fix itself.
         isRetryable: (e) => {
+          if (outer?.aborted) return false;
           const status = (e as { status?: number }).status;
           return status === undefined || status >= 500;
         },
@@ -129,11 +130,11 @@ export class OllamaProvider implements LlmProvider {
     });
   }
 
-  private async completeWithJson(messages: ChatMessage[]): Promise<AssistantTurn> {
+  private async completeWithJson(messages: ChatMessage[], signal?: AbortSignal): Promise<AssistantTurn> {
     const convo = this.toJsonMessages(messages);
     let lastError = '';
     for (let attempt = 0; attempt <= 2; attempt++) {
-      const reply = await this.chat({ messages: convo, format: ACTION_FORMAT });
+      const reply = await this.chat({ messages: convo, format: ACTION_FORMAT }, signal);
       this.opts.onRaw?.(reply.content);
       const parsed = parseAction(reply.content);
       if (parsed.ok) return actionToTurn(parsed.action, ++this.callSeq);
@@ -147,7 +148,7 @@ export class OllamaProvider implements LlmProvider {
 
   // ---- native tool calling ----------------------------------------------
 
-  private async completeWithTools(messages: ChatMessage[], tools: ToolSpec[]): Promise<AssistantTurn> {
+  private async completeWithTools(messages: ChatMessage[], tools: ToolSpec[], signal?: AbortSignal): Promise<AssistantTurn> {
     const convo: OllamaMessage[] = messages.map((m): OllamaMessage => {
       switch (m.role) {
         case 'assistant':
@@ -162,10 +163,13 @@ export class OllamaProvider implements LlmProvider {
           return { role: m.role, content: m.content };
       }
     });
-    const reply = await this.chat({
-      messages: convo,
-      tools: tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters } })),
-    });
+    const reply = await this.chat(
+      {
+        messages: convo,
+        tools: tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters } })),
+      },
+      signal,
+    );
     this.opts.onRaw?.(JSON.stringify(reply));
     const toolCalls: ToolCall[] = (reply.tool_calls ?? []).map((c) => ({
       id: `call_${++this.callSeq}`,

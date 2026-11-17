@@ -34,7 +34,7 @@ export interface AssistantTurn {
 export interface LlmProvider {
   readonly name: string;
   /** One model call. Returns either tool calls to run, or a final text answer (no tool calls). */
-  complete(messages: ChatMessage[], tools: ToolSpec[]): Promise<AssistantTurn>;
+  complete(messages: ChatMessage[], tools: ToolSpec[], signal?: AbortSignal): Promise<AssistantTurn>;
 }
 
 export class ProviderError extends Error {

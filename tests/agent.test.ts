@@ -36,6 +36,14 @@ describe('agent loop with the mock provider over real MCP', () => {
     expect(system?.content).toContain('Last quarter is 2026-07-01 to 2026-09-30');
   });
 
+  it('stops with time_limit when the signal is already aborted', async () => {
+    const p = new MockProvider([{ answer: 'never reached' }]);
+    const r = await runAgent('anything', client, p, { ...opts, signal: AbortSignal.abort() });
+    expect(r.stoppedReason).toBe('time_limit');
+    expect(r.steps).toBe(0);
+    expect(p.calls).toHaveLength(0);
+  });
+
   it('stops at the step limit', async () => {
     const loop = new MockProvider([{ call: 'run_select', args: { query: 'SELECT 1 FROM customers LIMIT 1' } }]);
     const r = await runAgent('loop forever', client, loop, { ...opts, maxSteps: 3 });

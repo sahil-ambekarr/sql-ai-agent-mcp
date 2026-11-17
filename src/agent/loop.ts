@@ -23,7 +23,7 @@ export interface ToolCallRecord {
 export interface AgentResult {
   question: string;
   answer: string;
-  stoppedReason: 'answered' | 'max_steps' | 'provider_error';
+  stoppedReason: 'answered' | 'max_steps' | 'provider_error' | 'time_limit';
   error?: string;
   /** Number of model calls made. */
   steps: number;
@@ -40,6 +40,8 @@ export interface AgentOptions {
   dialect: 'sqlite' | 'mssql';
   /** Fetch the schema through MCP up front and put it in the system prompt (default true). */
   primeSchema?: boolean;
+  /** Aborts the run (including an in-flight model call); the result is stopped with 'time_limit'. */
+  signal?: AbortSignal;
   onEvent?: (e: { type: 'tool_call' | 'tool_result' | 'model'; detail: string }) => void;
 }
 
@@ -60,12 +62,16 @@ export async function runAgent(question: string, tools: ToolExecutor, provider: 
   const result: AgentResult = { question, answer: '', stoppedReason: 'max_steps', steps: 0, toolCalls: [], sql: [], durationMs: 0 };
 
   while (result.steps < opts.maxSteps) {
+    if (opts.signal?.aborted) {
+      result.stoppedReason = 'time_limit';
+      break;
+    }
     result.steps++;
     let turn;
     try {
-      turn = await provider.complete(messages, specs);
+      turn = await provider.complete(messages, specs, opts.signal);
     } catch (e) {
-      result.stoppedReason = 'provider_error';
+      result.stoppedReason = opts.signal?.aborted ? 'time_limit' : 'provider_error';
       result.error = (e as Error).message;
       break;
     }
@@ -99,6 +105,7 @@ export async function runAgent(question: string, tools: ToolExecutor, provider: 
   }
 
   if (result.stoppedReason === 'max_steps') result.answer = `(stopped after ${opts.maxSteps} steps without a final answer)`;
+  if (result.stoppedReason === 'time_limit') result.answer = `(stopped: time limit reached after ${result.steps} step(s))`;
   if (result.stoppedReason === 'provider_error') result.answer = `(model error: ${result.error})`;
   result.durationMs = Math.round(performance.now() - t0);
   return result;
