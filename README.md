@@ -212,13 +212,24 @@ scripts/                  seeding and demo capture/render
 npm run lint && npm run typecheck && npm test
 ```
 
-TESTS_PLACEHOLDER
+Last local run (2026-11-17, Node 24.13, Windows 11): **138 tests in 7 files, all passing**, about 15 s.
+
+| File | Tests | What it covers |
+|---|---|---|
+| `tests/guard.test.ts` | 81 | 54 queries that must be blocked plus a check that the blocked suite stays large (stacked statements, comment tricks, writes in CTEs, `SELECT INTO`, PRAGMA/ATTACH, EXEC/xp_cmdshell, system tables, bind variables, NUL bytes ...), 20 legitimate queries that must pass, 6 detail checks (fail-closed parsing, layer names) |
+| `tests/query-service.test.ts` | 13 | row limit and clamping, result-size cap, timeout kill and recovery, read-only connection as the last layer, table-name injection in describe_table, append-only audit log |
+| `tests/mcp-integration.test.ts` | 8 | spawns the real server over stdio and calls every tool as an MCP client, including a blocked write, a timeout and schema validation |
+| `tests/mcp-http.test.ts` | 2 | streamable HTTP transport and the Host-header guard |
+| `tests/agent.test.ts` | 9 | agent loop over real MCP with the mock provider: schema priming, step limit, time limit, and the ticket-42 prompt injection (every write the "obedient" model tries is blocked) |
+| `tests/providers.test.ts` | 11 | Ollama JSON and tools modes, retries, abort; Claude provider with a stubbed HTTP layer |
+| `tests/mssql-dialect.test.ts` | 14 | T-SQL TOP rewrite, catalog SQL, T-SQL guard dialect, generated seed script |
 
 CI (`.github/workflows/ci.yml`) runs lint, typecheck, build, seed, the tests, and `npm run eval -- --provider mock`.
 
 ## Key decisions
 
-- **MCP SDK v2 packages.** The brief named `@modelcontextprotocol/sdk`; the current official release line splits it into `@modelcontextprotocol/server`, `/client` and `/node` (v2 implements the 2026-07-28 spec). I used those and read their bundled type definitions for the API.
+- **MCP SDK v2 packages.** The older single `@modelcontextprotocol/sdk` package is split in the current official release line into `@modelcontextprotocol/server`, `/client` and `/node` (v2 implements the 2026-07-28 spec). I used those and read their bundled type definitions for the API.
+- **Eval runner that survives interruptions.** CPU-only, shared Ollama is slow (one question took over 10 minutes in an earlier attempt), so `npm run eval` rewrites its results file after every question, reconnects the MCP client if a question throws, and takes `--budget-min` to stop starting new questions after a wall-clock budget.
 - **Defence in depth over one clever check.** Each guard layer is simple and independently tested; any one of them stops the blocked suite.
 - **Reject comments outright** rather than trying to strip them the way each engine would.
 - **Fail closed on parse errors**, with a PostgreSQL-grammar fallback for SQLite because node-sql-parser's SQLite grammar misses some valid syntax (`OVER (ORDER BY ...)`, `FILTER`, `NULLS LAST`).

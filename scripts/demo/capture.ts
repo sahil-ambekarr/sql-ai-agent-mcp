@@ -3,7 +3,8 @@
  * docs/demo/*.txt. render-gif.ts then turns those transcripts into a GIF, so
  * every character in the GIF came from an actual run.
  *
- *   npm run demo:capture   (needs Ollama for the first transcript)
+ *   npm run demo:capture                 (needs Ollama for the first transcript)
+ *   npm run demo:capture -- blocked      (only captures whose file name contains "blocked")
  */
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -34,8 +35,9 @@ const captures: Capture[] = [
   },
 ];
 
+const only = process.argv[2];
 mkdirSync('docs/demo', { recursive: true });
-for (const c of captures) {
+for (const c of captures.filter((x) => !only || x.file.includes(only))) {
   process.stderr.write(`capturing: ${c.display}\n`);
   const r = spawnSync(process.execPath, c.args, {
     env: { ...process.env, LOG_LEVEL: 'warn', ...c.env },
