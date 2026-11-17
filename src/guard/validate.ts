@@ -104,13 +104,25 @@ export function validateSelect(input: unknown, opts: GuardOptions): GuardResult 
   const cleaned = sql.slice(0, last?.kind === 'punct' && last.text === ';' ? last.start : sql.length).trim();
 
   // --- parser -------------------------------------------------------------
-  const database = opts.dialect === 'mssql' ? 'transactsql' : 'sqlite';
+  // node-sql-parser's SQLite grammar misses some valid syntax (OVER (ORDER BY ..),
+  // FILTER, NULLS LAST), so its PostgreSQL grammar is tried second. The AST only
+  // has to agree that this is ONE plain SELECT; the lexical layer and the
+  // read-only connection still apply whichever grammar succeeded.
+  const grammars = opts.dialect === 'mssql' ? ['transactsql'] : ['sqlite', 'postgresql'];
   let ast: unknown;
-  try {
-    ast = parser.astify(cleaned, { database });
-  } catch (e) {
-    const msg = (e as Error).message.split('\n')[0]?.slice(0, 160) ?? 'syntax error';
-    return reject('parser', `the SQL parser could not read this query, so it is refused (fail-closed). Simplify the SQL. Parser said: ${msg}`);
+  let database = grammars[0] as string;
+  let firstError = '';
+  for (const g of grammars) {
+    try {
+      ast = parser.astify(cleaned, { database: g });
+      database = g;
+      break;
+    } catch (e) {
+      firstError ||= (e as Error).message.split('\n')[0]?.slice(0, 160) ?? 'syntax error';
+    }
+  }
+  if (ast === undefined) {
+    return reject('parser', `the SQL parser could not read this query, so it is refused (fail-closed). Simplify the SQL. Parser said: ${firstError}`);
   }
   const statements = Array.isArray(ast) ? ast : [ast];
   if (statements.length !== 1) return reject('parser', 'multiple statements are not allowed');
