@@ -2,3 +2,4 @@
 * text=auto eol=lf
 *.gif binary
 *.png binary
+*.sql linguist-detectable=false
