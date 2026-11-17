@@ -22,7 +22,7 @@ import { runAgent, type AgentResult } from '../agent/loop.ts';
 import { SqlMcpClient } from '../agent/mcp-client.ts';
 import { createProvider } from '../agent/providers/index.ts';
 import { rowsFromToolText, rowsToAnswer, type MockStep } from '../agent/providers/mock.ts';
-import { computeGold, grade, loadQuestions } from './gold.ts';
+import { computeGold, gradeRun, loadQuestions } from './gold.ts';
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
@@ -114,7 +114,7 @@ try {
       await client.close();
       client = await SqlMcpClient.connect();
     }
-    const g = grade(r.answer, q);
+    const g = gradeRun(r.answer, r.stoppedReason, q);
     const row: Row = {
       id: q.id,
       question: q.question,

@@ -78,6 +78,16 @@ export function grade(answer: string, q: GoldQuestion): { correct: boolean; expe
   }
 }
 
+/**
+ * Grades a whole agent run. Only a real final answer can be correct: the stop
+ * messages ("stopped after 6 steps ...") contain numbers that would otherwise
+ * match a numeric check by accident.
+ */
+export function gradeRun(answer: string, stoppedReason: string, q: GoldQuestion): { correct: boolean; expected: string } {
+  const g = grade(answer, q);
+  return { correct: stoppedReason === 'answered' && g.correct, expected: g.expected };
+}
+
 // CLI: print the expected answers.
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const { loadConfig } = await import('../config.ts');
